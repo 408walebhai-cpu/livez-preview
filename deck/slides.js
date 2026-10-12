@@ -1,0 +1,17 @@
+window.SLIDES=[
+{k:'title'},
+{k:'grid',title:'One connected system',sub:'12 modules · from first enquiry to monthly rent'},
+{k:'journey',title:'The resident journey',steps:['Enquiry','Lead CRM','Site visit','Onboard + KYC','E-stamp agreement','Bed assigned','Monthly rent','Bills & requests','Move-out']},
+{k:'flow',m:'Dashboard',shot:'dashboard',title:'Dashboard',steps:['Login','Portfolio KPIs','Today\'s visits, late rent, tickets','Drill into property'],note:'Occupancy, collection %, hot leads and open tickets at a glance.'},
+{k:'flow',m:'Properties & beds',shot:'properties-p1',title:'Properties & beds',steps:['Add property','Auto-generate floors/rooms/beds','Bed grid by floor','Click bed → assign / move-out'],note:'Property → floor → room → bed, single/twin/triple sharing.'},
+{k:'flow',m:'Leads CRM',shot:'leads',title:'Leads CRM',steps:['Portal enquiry lands','Auto-merge duplicates','Tag Hot / Warm / Cold','Reply · schedule visit','Convert to tenant'],note:'Inbox + pipeline (kanban) views; unlock BedR-verified leads.'},
+{k:'flow',m:'Visits',shot:'visits',title:'Visit management',steps:['Schedule from lead','Auto-assign caretaker','Visit happens','Log outcome → lead stage updates']},
+{k:'flow',m:'Tenants & KYC',shot:'onboard',title:'Tenant onboarding',steps:['Details','KYC (ID upload)','Pick vacant bed + rent','E-stamp agreement','Rent schedule + documents created']},
+{k:'flow',m:'Rent collection',shot:'rent',title:'Rent collection',steps:['Rent + due date set once','WhatsApp reminder + UPI link','Tenant pays','Mark paid → receipt sent','Late fee auto-applied']},
+{k:'flow',m:'Electricity bills',shot:'electricity',title:'Electricity bills',steps:['Scan bill / meter (OCR)','Enter units per room','Split: sub-meter · heads · equal','Send to tenants','Track paid']},
+{k:'flow',m:'Maintenance',shot:'tickets',title:'Maintenance requests',steps:['Resident raises request','Priority + category','Assign staff','Open → In progress → Resolved']},
+{k:'flow',m:'Team & roles',shot:'team',title:'Caretakers & team',steps:['Invite member','Pick role','Scope to properties','Permission matrix applies']},
+{k:'flow',m:'Documents',shot:'documents',title:'Documents',steps:['KYC / agreements / receipts auto-filed','Search by file or tenant','Preview','Share / download']},
+{k:'flow',m:'Marketplace sync',shot:'listings',title:'Marketplace sync',steps:['Toggle portals per property','Vacancies sync automatically','Enquiries flow into Leads CRM']},
+{k:'flow',m:'Analytics',shot:'analytics',title:'Analytics',steps:['Live KPIs','Revenue trend & lead sources','Compare properties','Export report']},
+{k:'end'}];

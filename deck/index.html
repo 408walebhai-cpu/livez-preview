@@ -1,0 +1,50 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>LivEZ — Product flows</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#25252e;--mut:#6f6a7d;--bg:#f3f3f7;--pr:#7c63e2;--soft:#eee7f8;--line:#e2ddeb}
+*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:Manrope,Arial,sans-serif;color:var(--ink);background:var(--bg);overflow:hidden}
+#s{position:absolute;inset:0;padding:6vh 6vw;display:flex;flex-direction:column}
+.brand{view-transition-name:brand;font-weight:800;font-size:22px;letter-spacing:-.03em}.brand b{color:var(--pr)}
+.top{display:flex;justify-content:space-between;align-items:center}.pg{view-transition-name:pg;color:var(--mut);font-size:14px;font-variant-numeric:tabular-nums}
+h1{view-transition-name:title;font-size:clamp(34px,4.4vw,64px);letter-spacing:-.035em;margin:3vh 0 1vh;line-height:1.02}
+.sub{color:var(--mut);font-size:clamp(15px,1.4vw,20px);margin:0}
+.hero{flex:1;display:flex;flex-direction:column;justify-content:center}.hero h1{font-size:clamp(54px,8vw,120px)}
+.blk{view-transition-name:blk;width:110px;height:14px;background:var(--pr);border-radius:99px;margin-top:4vh}
+.flow{display:grid;grid-template-columns:minmax(260px,1fr) 1.9fr;gap:4vw;flex:1;align-items:center;min-height:0}
+.steps{display:flex;flex-direction:column;gap:10px;view-transition-name:steps}
+.st{display:flex;gap:14px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:14px;padding:12px 16px;font-weight:600;font-size:clamp(13px,1.15vw,17px);opacity:0;transform:translateX(-14px);animation:in .45s forwards}
+.st i{font-style:normal;width:28px;height:28px;border-radius:50%;background:var(--soft);color:var(--pr);display:grid;place-items:center;font-size:13px;flex:none}
+.st:last-child{background:var(--ink);color:#fff;border-color:var(--ink)}.st:last-child i{background:var(--pr);color:#fff}
+@keyframes in{to{opacity:1;transform:none}}
+.frame{view-transition-name:frame;background:#fff;border:1px solid var(--line);border-radius:18px;padding:10px;max-height:72vh;overflow:hidden}
+.frame .bar{display:flex;gap:6px;padding:2px 4px 10px}.frame .bar span{width:10px;height:10px;border-radius:50%;background:#dcd6e6}
+.frame img{width:100%;display:block;border-radius:10px}
+.note{color:var(--mut);margin-top:14px;font-size:14px}
+.chip{view-transition-name:chip;display:inline-block;background:var(--soft);color:var(--pr);font-weight:700;border-radius:99px;padding:5px 12px;font-size:13px;margin-top:2vh;align-self:flex-start}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:4vh}
+.mod{background:#fff;border:1px solid var(--line);border-radius:16px;padding:18px;font-weight:700;cursor:pointer;opacity:0;animation:in .4s forwards;transform:translateY(10px)}.mod:hover{border-color:var(--pr)}.mod small{display:block;color:var(--mut);font-weight:500;margin-top:6px}
+.journey{display:flex;flex-wrap:wrap;gap:10px;margin-top:6vh;align-items:center}.journey .st{animation-duration:.4s}.arr{color:var(--pr);font-weight:800;opacity:0;animation:in .4s forwards}
+.nav{position:fixed;bottom:22px;right:28px;display:flex;gap:8px;z-index:5}.nav button{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:#fff;font-size:18px;cursor:pointer}.nav button:hover{border-color:var(--pr);color:var(--pr)}
+.prog{position:fixed;left:0;bottom:0;height:4px;background:var(--pr);transition:width .5s;z-index:5}
+::view-transition-group(*){animation-duration:.6s;animation-timing-function:cubic-bezier(.6,0,.2,1)}
+::view-transition-old(root){animation:.35s out forwards}::view-transition-new(root){animation:.45s .1s inr both}
+@keyframes out{to{opacity:0;transform:scale(.985)}}@keyframes inr{from{opacity:0;transform:scale(1.015)}}
+.nofx #s{animation:inr .45s}
+</style></head><body><div id="s"></div><div class="prog" id="prog"></div><div class="nav"><button id="pv">←</button><button id="nx">→</button></div>
+<script src="slides.js"></script><script>
+const S=window.SLIDES;let i=+(location.hash.slice(1))||0;const el=document.getElementById('s');
+const desc={'Dashboard':'Portfolio at a glance','Properties & beds':'Rooms & bed grid','Tenants & KYC':'Onboard, KYC, e-stamp','Rent collection':'Reminders, UPI, receipts','Electricity bills':'OCR, fair split','Leads CRM':'All portals, one inbox','Visits':'Schedule & assign','Maintenance':'Resident requests','Team & roles':'Role-based access','Documents':'Searchable vault','Marketplace sync':'BedR & portal listings','Analytics':'Trends, compare, export'};
+const hdr=n=>`<div class="top"><div class="brand">Liv<b>EZ</b></div><div class="pg">${String(n+1).padStart(2,'0')} / ${S.length}</div></div>`;
+function html(s,n){
+ if(s.k==='title')return hdr(n)+`<div class="hero"><span class="chip">Product walkthrough · Oct 2026</span><h1>Less managing.<br>More living.</h1><p class="sub">LivEZ — the operating system for PGs, hostels and co-living. User flows, module by module.</p><div class="blk"></div></div>`;
+ if(s.k==='end')return hdr(n)+`<div class="hero"><span class="chip">Next</span><h1>Make room<br>for better.</h1><p class="sub">Frontend complete · next: backend, resident app, WhatsApp & calling integrations.</p><div class="blk"></div></div>`;
+ if(s.k==='grid')return hdr(n)+`<span class="chip">Overview</span><h1>${s.title}</h1><p class="sub">${s.sub}</p><div class="grid">${Object.keys(desc).map((m,j)=>`<div class="mod" style="animation-delay:${j*40}ms" data-go="${S.findIndex(x=>x.m===m)}">${m}<small>${desc[m]}</small></div>`).join('')}</div>`;
+ if(s.k==='journey')return hdr(n)+`<span class="chip">End-to-end</span><h1>${s.title}</h1><div class="journey">${s.steps.map((x,j)=>(j?`<span class="arr" style="animation-delay:${j*90}ms">→</span>`:'')+`<div class="st" style="animation-delay:${j*90}ms"><i>${j+1}</i>${x}</div>`).join('')}</div>`;
+ return hdr(n)+`<span class="chip">${s.m}</span><h1>${s.title}</h1><div class="flow"><div><div class="steps">${s.steps.map((x,j)=>`<div class="st" style="animation-delay:${150+j*110}ms"><i>${j+1}</i>${x}</div>`).join('')}</div>${s.note?`<p class="note">${s.note}</p>`:''}</div><div class="frame"><div class="bar"><span></span><span></span><span></span></div><img src="shots/${s.shot}.png" alt=""></div></div>`;
+}
+function render(){el.innerHTML=html(S[i],i);document.getElementById('prog').style.width=((i+1)/S.length*100)+'%';location.replace('#'+i);el.querySelectorAll('[data-go]').forEach(d=>d.onclick=e=>{e.stopPropagation();go(+d.dataset.go)})}
+function go(n){n=Math.max(0,Math.min(S.length-1,n));if(n===i)return;i=n;if(document.startViewTransition)document.startViewTransition(render);else{document.body.classList.add('nofx');render()}}
+addEventListener('keydown',e=>{if(['ArrowRight',' ','PageDown','Enter'].includes(e.key))go(i+1);if(['ArrowLeft','PageUp','Backspace'].includes(e.key))go(i-1);if(e.key==='Home')go(0);if(e.key==='End')go(S.length-1)});
+el.onclick=()=>go(i+1);pv.onclick=()=>go(i-1);nx.onclick=()=>go(i+1);
+S.forEach(s=>{if(s.shot)new Image().src='shots/'+s.shot+'.png'});render();
+</script></body></html>
