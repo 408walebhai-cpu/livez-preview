@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scheduled Maintenance — LivEZ</title>
+<style>
+:root{--bg:#f6f7fb;--card:#fff;--tx:#161a2b;--mu:#6b7186;--ln:#e4e7f0;--ac:#4f46e5;--ok:#16a34a;--wr:#d97706;--er:#dc2626}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1220;--card:#181c30;--tx:#eceefa;--mu:#9aa0b8;--ln:#2a2f4a;--ac:#818cf8;--ok:#4ade80;--wr:#fbbf24;--er:#f87171}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 Manrope,system-ui,-apple-system,Segoe UI,sans-serif}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+h1{font-size:20px;margin:0}h1 b{color:var(--ac)}h2{font-size:15px;margin:0 0 10px}
+a{color:var(--ac);text-decoration:none}
+.tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.tab,.btn{border:1px solid var(--ln);background:var(--card);color:var(--tx);padding:7px 12px;border-radius:8px;cursor:pointer;font:inherit}
+.tab.on,.btn.pri{background:var(--ac);border-color:var(--ac);color:#fff}
+.btn.sm{padding:3px 8px;font-size:12px}.btn.del{color:var(--er)}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:12px;padding:14px;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+label{display:block;font-size:12px;color:var(--mu);margin-bottom:3px}
+input,select,textarea{width:100%;padding:7px 9px;border:1px solid var(--ln);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
+.table{overflow-x:auto}table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--ln);white-space:nowrap}
+th{color:var(--mu);font-weight:600;font-size:12px}
+.pill{padding:2px 8px;border-radius:99px;font-size:12px;border:1px solid currentColor}
+.Done{color:var(--ok)}.Missed{color:var(--er)}.Skipped{color:var(--mu)}.Pending{color:var(--wr)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:12px}
+.stat{border:1px solid var(--ln);border-radius:10px;padding:10px}.stat b{display:block;font-size:20px}.stat span{color:var(--mu);font-size:12px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.mu{color:var(--mu)}
+.hide{display:none}
+@media print{body{background:#fff;color:#000}.noprint{display:none!important}.card{border:0;padding:0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Liv<b>EZ</b> · Scheduled maintenance</h1>
+    <a class="noprint" href="../">← Back to dashboard</a>
+  </header>
+  <div class="tabs noprint">
+    <button class="tab" data-tab="today">Today</button>
+    <button class="tab" data-tab="tasks">Scheduled tasks</button>
+    <button class="tab" data-tab="reports">Reports</button>
+  </div>
+  <div id="view"></div>
+</div>
+
+<script>
+const DB_KEY='livez:db:v2', KEY='livez:sched:v1';
+const CATS=['Plumbing','Electrical','Wi-Fi','Housekeeping','Water tank','Pest control','Fire safety','Lift / generator','Other'];
+const DOW=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const rd=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}};
+const db=rd(DB_KEY,{}), props=db.properties||[], staff=db.staff||[], tickets=db.tickets||[];
+let S=rd(KEY,{tasks:[],runs:{}});
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){alert('Could not save on this browser.')}};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad=n=>String(n).padStart(2,'0');
+const iso=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const parse=s=>new Date(s+'T00:00:00');
+const today=iso(new Date());
+const pName=id=>id?(props.find(p=>p.id===id)||{}).name||id:'All properties';
+const sName=id=>id?(staff.find(s=>s.id===id)||{}).name||'—':'Unassigned';
+const uid=()=>'m'+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36);
+
+let tab='today', editing=null, rep={type:'weekly',date:today};
+
+function isDue(t,ds){
+  if(!t.active||ds<t.start)return false;
+  const d=parse(ds);
+  if(t.freq==='daily')return true;
+  if(t.freq==='weekly')return d.getDay()===+t.dow;
+  const dim=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+  return d.getDate()===Math.min(+t.dom,dim);
+}
+function occurrences(from,to){
+  const out=[];
+  for(let d=parse(from);iso(d)<=to;d.setDate(d.getDate()+1)){
+    const ds=iso(d);
+    S.tasks.forEach(t=>{if(isDue(t,ds)){
+      const run=S.runs[t.id+'|'+ds];
+      out.push({t,date:ds,run,status:run?run.status:(ds<today?'Missed':'Pending')});
+    }});
+  }
+  return out;
+}
+function range(type,ds){
+  const d=parse(ds);
+  if(type==='daily')return[ds,ds,ds];
+  if(type==='weekly'){const s=new Date(d);s.setDate(d.getDate()-((d.getDay()+6)%7));const e=new Date(s);e.setDate(s.getDate()+6);return[iso(s),iso(e),'Week of '+iso(s)]}
+  const s=new Date(d.getFullYear(),d.getMonth(),1),e=new Date(d.getFullYear(),d.getMonth()+1,0);
+  return[iso(s),iso(e),d.toLocaleString('en',{month:'long',year:'numeric'})];
+}
+const freqText=t=>t.freq==='daily'?'Daily':t.freq==='weekly'?'Weekly · '+DOW[t.dow]:'Monthly · day '+t.dom;
+const opts=(arr,sel)=>arr.map(([v,l])=>`<option value="${esc(v)}"${v==sel?' selected':''}>${esc(l)}</option>`).join('');
+
+function render(){
+  document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
+  const v=document.getElementById('view');
+  v.innerHTML=tab==='today'?todayView():tab==='tasks'?tasksView():reportView();
+}
+
+function todayView(){
+  const missed=occurrences(iso(new Date(Date.now()-6*864e5)),today).filter(o=>o.status==='Missed');
+  const due=occurrences(today,today);
+  const row=o=>`<tr><td>${esc(o.date)} ${esc(o.t.time)}</td><td>${esc(o.t.title)}</td><td>${esc(pName(o.t.property))}</td><td>${esc(sName(o.t.assignee))}</td>
+    <td><span class="pill ${o.status}">${o.status}</span></td>
+    <td class="noprint">${o.status==='Done'||o.status==='Skipped'?`<button class="btn sm" data-act="undo" data-k="${o.t.id}|${o.date}">Undo</button>`:
+    `<button class="btn sm pri" data-act="done" data-k="${o.t.id}|${o.date}">Done</button> <button class="btn sm" data-act="skip" data-k="${o.t.id}|${o.date}">Skip</button>`}</td></tr>`;
+  const tbl=rows=>rows.length?`<div class="table"><table><tr><th>When</th><th>Task</th><th>Property</th><th>Assigned</th><th>Status</th><th></th></tr>${rows.map(row).join('')}</table></div>`:'<p class="mu">Nothing here.</p>';
+  return `<div class="card"><h2>Due today (${today})</h2>${S.tasks.length?tbl(due):'<p class="mu">No scheduled tasks yet. Add one in “Scheduled tasks”.</p>'}</div>
+  <div class="card"><h2>Missed in the last 7 days</h2>${tbl(missed)}</div>`;
+}
+
+function tasksView(){
+  const e=editing&&(editing==='new'?{title:'',category:'Plumbing',property:'',assignee:'',freq:'weekly',dow:1,dom:1,time:'10:00',start:today,notes:'',active:true}:S.tasks.find(t=>t.id===editing));
+  const form=e?`<div class="card"><h2>${editing==='new'?'New scheduled task':'Edit task'}</h2>
+  <div class="grid">
+   <div><label>Title</label><input id="f-title" value="${esc(e.title)}" placeholder="e.g. Clean water tank"></div>
+   <div><label>Category</label><select id="f-cat">${opts(CATS.map(c=>[c,c]),e.category)}</select></div>
+   <div><label>Property</label><select id="f-prop">${opts([['','All properties'],...props.map(p=>[p.id,p.name])],e.property)}</select></div>
+   <div><label>Assigned to</label><select id="f-asg">${opts([['','Unassigned'],...staff.map(s=>[s.id,s.name+' ('+s.role+')'])],e.assignee)}</select></div>
+   <div><label>Repeats</label><select id="f-freq">${opts([['daily','Daily'],['weekly','Weekly'],['monthly','Monthly']],e.freq)}</select></div>
+   <div id="w-dow"><label>Day of week</label><select id="f-dow">${opts(DOW.map((d,i)=>[i,d]),e.dow)}</select></div>
+   <div id="w-dom"><label>Day of month</label><input id="f-dom" type="number" min="1" max="31" value="${e.dom}"></div>
+   <div><label>Time</label><input id="f-time" type="time" value="${e.time}"></div>
+   <div><label>Starts on</label><input id="f-start" type="date" value="${e.start}"></div>
+  </div>
+  <label style="margin-top:10px">Notes / checklist</label><textarea id="f-notes" rows="2">${esc(e.notes)}</textarea>
+  <div class="row" style="margin-top:10px"><button class="btn pri" data-act="save">Save task</button><button class="btn" data-act="cancel">Cancel</button></div></div>`:'';
+  const list=S.tasks.length?`<div class="table"><table><tr><th>Task</th><th>Category</th><th>Property</th><th>Assigned</th><th>Schedule</th><th>Active</th><th></th></tr>
+  ${S.tasks.map(t=>`<tr><td>${esc(t.title)}</td><td>${esc(t.category)}</td><td>${esc(pName(t.property))}</td><td>${esc(sName(t.assignee))}</td><td>${freqText(t)} · ${esc(t.time)}</td>
+  <td><input type="checkbox" data-act="toggle" data-id="${t.id}" ${t.active?'checked':''} style="width:auto"></td>
+  <td><button class="btn sm" data-act="edit" data-id="${t.id}">Edit</button> <button class="btn sm del" data-act="del" data-id="${t.id}">Delete</button></td></tr>`).join('')}</table></div>`:'<p class="mu">No tasks yet.</p>';
+  return form+`<div class="card"><div class="row" style="justify-content:space-between"><h2>Scheduled tasks</h2>
+   <span><button class="btn pri" data-act="new">+ New task</button> ${S.tasks.length?'':'<button class="btn" data-act="sample">Add sample tasks</button>'}</span></div>${list}</div>`;
+}
+
+function reportView(){
+  const [from,to,label]=range(rep.type,rep.date);
+  const occ=occurrences(from,to);
+  const c=s=>occ.filter(o=>o.status===s).length;
+  const done=c('Done'),total=occ.length,settled=total-c('Pending');
+  const pct=settled?Math.round(done/settled*100):0;
+  const group=(key)=>{const m={};occ.forEach(o=>{const k=key(o);(m[k]=m[k]||{n:0,d:0});m[k].n++;if(o.status==='Done')m[k].d++});return Object.entries(m).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v.n}</td><td>${v.d}</td><td>${Math.round(v.d/v.n*100)}%</td></tr>`).join('')};
+  const tk=tickets.filter(t=>t.created>=from&&t.created<=to);
+  return `<div class="card noprint"><div class="row">
+    <div><label>Report type</label><select id="r-type">${opts([['daily','Daily'],['weekly','Weekly'],['monthly','Monthly']],rep.type)}</select></div>
+    <div><label>Date</label><input id="r-date" type="date" value="${rep.date}"></div>
+    <div style="margin-left:auto" class="row"><button class="btn" data-act="csv">Download CSV</button><button class="btn pri" data-act="print">Print / Save PDF</button></div></div></div>
+  <div class="card"><h2>${rep.type[0].toUpperCase()+rep.type.slice(1)} maintenance report · ${esc(label)}</h2>
+  <p class="mu">${from}${from!==to?' to '+to:''} · generated ${new Date().toLocaleString()}</p>
+  <div class="stats"><div class="stat"><b>${total}</b><span>Scheduled</span></div><div class="stat"><b class="Done">${done}</b><span>Done</span></div>
+   <div class="stat"><b class="Skipped">${c('Skipped')}</b><span>Skipped</span></div><div class="stat"><b class="Missed">${c('Missed')}</b><span>Missed</span></div>
+   <div class="stat"><b class="Pending">${c('Pending')}</b><span>Upcoming</span></div><div class="stat"><b>${pct}%</b><span>Completion</span></div></div>
+  ${total?`<h2>By property</h2><div class="table"><table><tr><th>Property</th><th>Tasks</th><th>Done</th><th>Rate</th></tr>${group(o=>pName(o.t.property))}</table></div>
+  <h2 style="margin-top:12px">By category</h2><div class="table"><table><tr><th>Category</th><th>Tasks</th><th>Done</th><th>Rate</th></tr>${group(o=>o.t.category)}</table></div>
+  <h2 style="margin-top:12px">Task log</h2><div class="table"><table><tr><th>Date</th><th>Task</th><th>Property</th><th>Assigned</th><th>Status</th><th>Note</th></tr>
+  ${occ.map(o=>`<tr><td>${o.date}</td><td>${esc(o.t.title)}</td><td>${esc(pName(o.t.property))}</td><td>${esc(sName(o.t.assignee))}</td><td><span class="pill ${o.status}">${o.status}</span></td><td>${esc(o.run&&o.run.note||'')}</td></tr>`).join('')}</table></div>`:'<p class="mu">No scheduled tasks fall in this period.</p>'}
+  ${tk.length?`<h2 style="margin-top:12px">Resident maintenance tickets raised (${tk.length})</h2><div class="table"><table><tr><th>ID</th><th>Category</th><th>Issue</th><th>Priority</th><th>Status</th></tr>${tk.map(t=>`<tr><td>${esc(t.id)}</td><td>${esc(t.category)}</td><td>${esc(t.title)}</td><td>${esc(t.priority)}</td><td>${esc(t.status)}</td></tr>`).join('')}</table></div>`:''}
+  </div>`;
+}
+
+function csv(){
+  const [from,to]=range(rep.type,rep.date);
+  const q=s=>'"'+String(s??'').replace(/"/g,'""')+'"';
+  const rows=[['Date','Time','Task','Category','Property','Assigned','Status','Note'],...occurrences(from,to).map(o=>[o.date,o.t.time,o.t.title,o.t.category,pName(o.t.property),sName(o.t.assignee),o.status,o.run&&o.run.note||''])];
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([rows.map(r=>r.map(q).join(',')).join('\n')],{type:'text/csv'}));
+  a.download=`livez-maintenance-${rep.type}-${from}.csv`;a.click();
+}
+
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-tab],[data-act]');if(!t)return;
+  if(t.dataset.tab){tab=t.dataset.tab;editing=null;return render()}
+  const a=t.dataset.act,id=t.dataset.id,k=t.dataset.k;
+  if(a==='done'||a==='skip'){const note=prompt('Add a note (optional)')||'';S.runs[k]={status:a==='done'?'Done':'Skipped',note,at:new Date().toISOString()}}
+  else if(a==='undo')delete S.runs[k];
+  else if(a==='new'){editing='new';save();return render()}
+  else if(a==='edit'){editing=id;return render()}
+  else if(a==='cancel'){editing=null;return render()}
+  else if(a==='del'){if(!confirm('Delete this task and its history?'))return;S.tasks=S.tasks.filter(x=>x.id!==id);Object.keys(S.runs).forEach(r=>r.startsWith(id+'|')&&delete S.runs[r])}
+  else if(a==='sample'){const base={property:'',assignee:'',time:'10:00',start:today,notes:'',active:true,dow:1,dom:1};
+    S.tasks.push({...base,id:uid(),title:'Common area cleaning check',category:'Housekeeping',freq:'daily',time:'09:00'},
+      {...base,id:uid(),title:'Water tank cleaning',category:'Water tank',freq:'weekly',dow:6},
+      {...base,id:uid(),title:'Fire extinguisher & exit inspection',category:'Fire safety',freq:'monthly',dom:1},
+      {...base,id:uid(),title:'Pest control spray',category:'Pest control',freq:'monthly',dom:15})}
+  else if(a==='save'){
+    const g=i=>document.getElementById(i).value,title=g('f-title').trim();
+    if(!title)return alert('Please enter a title.');
+    const data={title,category:g('f-cat'),property:g('f-prop'),assignee:g('f-asg'),freq:g('f-freq'),dow:+g('f-dow'),dom:Math.min(31,Math.max(1,+g('f-dom')||1)),time:g('f-time')||'10:00',start:g('f-start')||today,notes:g('f-notes')};
+    if(editing==='new')S.tasks.push({...data,id:uid(),active:true});else Object.assign(S.tasks.find(x=>x.id===editing),data);
+    editing=null}
+  else if(a==='csv')return csv();
+  else if(a==='print')return window.print();
+  else if(a==='toggle'){S.tasks.find(x=>x.id===id).active=t.checked}
+  save();render();
+});
+document.addEventListener('change',e=>{
+  if(e.target.id==='r-type'){rep.type=e.target.value;render()}
+  if(e.target.id==='r-date'&&e.target.value){rep.date=e.target.value;render()}
+  if(e.target.id==='f-freq')syncFreq();
+});
+function syncFreq(){const f=document.getElementById('f-freq');if(!f)return;
+  document.getElementById('w-dow').classList.toggle('hide',f.value!=='weekly');
+  document.getElementById('w-dom').classList.toggle('hide',f.value!=='monthly')}
+new MutationObserver(syncFreq).observe(document.getElementById('view'),{childList:true});
+window.addEventListener('storage',e=>{if(e.key===KEY){S=rd(KEY,S);render()}});
+render();
+</script>
+</body>
+</html>
