@@ -29,6 +29,7 @@ th{color:var(--mu);font-weight:600;font-size:12px}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-bottom:12px}
 .stat{border:1px solid var(--ln);border-radius:10px;padding:10px}.stat b{display:block;font-size:20px}.stat span{color:var(--mu);font-size:12px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.mu{color:var(--mu)}
+.chk{display:flex;gap:10px;align-items:flex-start;padding:10px 4px;border-bottom:1px solid var(--ln);cursor:pointer;color:var(--tx);font-size:14px}.chk input{width:22px;height:22px;flex:none;margin-top:1px}.chk.Done b{text-decoration:line-through;color:var(--mu)}
 .hide{display:none}
 @media print{body{background:#fff;color:#000}.noprint{display:none!important}.card{border:0;padding:0}}
 </style>
@@ -40,7 +41,8 @@ th{color:var(--mu);font-weight:600;font-size:12px}
     <a class="noprint" href="../">← Back to dashboard</a>
   </header>
   <div class="tabs noprint">
-    <button class="tab" data-tab="today">Today</button>
+    <button class="tab" data-tab="today">Today's checklist</button>
+    <button class="tab" data-tab="sheet">Wall checklist</button>
     <button class="tab" data-tab="tasks">Scheduled tasks</button>
     <button class="tab" data-tab="reports">Reports</button>
   </div>
@@ -49,7 +51,25 @@ th{color:var(--mu);font-weight:600;font-size:12px}
 
 <script>
 const DB_KEY='livez:db:v2', KEY='livez:sched:v1';
-const CATS=['Plumbing','Electrical','Wi-Fi','Housekeeping','Water tank','Pest control','Fire safety','Lift / generator','Other'];
+const CATS=['Plumbing','Electrical','Wi-Fi','Housekeeping','Water tank','Pest control','Garden','Fire safety','Lift / generator','Other'];
+const ROLES=['Housekeeper','Gardener','Caretaker','Electrician','Plumber'];
+const SAMPLES=[ // title, role, category, freq, weekday, day-of-month, time
+['Washroom cleaning','Housekeeper','Housekeeping','daily',1,1,'08:00'],
+['Corridor cleaning','Housekeeper','Housekeeping','daily',1,1,'09:00'],
+['Staircase & common area mopping','Housekeeper','Housekeeping','daily',1,1,'10:00'],
+['Dustbin collection & disposal','Housekeeper','Housekeeping','daily',1,1,'07:30'],
+['Change bedsheets','Housekeeper','Housekeeping','weekly',1,1,'11:00'],
+['Change curtains','Housekeeper','Housekeeping','monthly',1,1,'11:00'],
+['Room cleaning & dusting','Housekeeper','Housekeeping','daily',1,1,'11:30'],
+['Kitchen & dining area cleaning','Housekeeper','Housekeeping','daily',1,1,'12:30'],
+['Clean windows & balcony','Housekeeper','Housekeeping','weekly',3,1,'14:00'],
+['Remove dry leaves & weeds','Gardener','Garden','weekly',3,1,'08:30'],
+['Watering plants','Gardener','Garden','daily',1,1,'07:00'],
+['Trim plants & clean garden area','Gardener','Garden','weekly',6,1,'08:00'],
+['Fertilise plants','Gardener','Garden','monthly',1,10,'08:00'],
+['Water tank cleaning','Caretaker','Water tank','weekly',6,1,'10:00'],
+['Fire extinguisher & exit check','Caretaker','Fire safety','monthly',1,1,'11:00'],
+['Pest control spray','Caretaker','Pest control','monthly',1,15,'11:00']];
 const DOW=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 const rd=(k,d)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}};
 const db=rd(DB_KEY,{}), props=db.properties||[], staff=db.staff||[], tickets=db.tickets||[];
@@ -64,7 +84,7 @@ const pName=id=>id?(props.find(p=>p.id===id)||{}).name||id:'All properties';
 const sName=id=>id?(staff.find(s=>s.id===id)||{}).name||'—':'Unassigned';
 const uid=()=>'m'+Date.now().toString(36)+Math.floor(Math.random()*1e4).toString(36);
 
-let tab='today', editing=null, rep={type:'weekly',date:today};
+let tab='today', editing=null, rep={type:'weekly',date:today}, sheet={role:'Housekeeper',type:'weekly',date:today};
 
 function isDue(t,ds){
   if(!t.active||ds<t.start)return false;
@@ -98,27 +118,48 @@ const opts=(arr,sel)=>arr.map(([v,l])=>`<option value="${esc(v)}"${v==sel?' sele
 function render(){
   document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
   const v=document.getElementById('view');
-  v.innerHTML=tab==='today'?todayView():tab==='tasks'?tasksView():reportView();
+  v.innerHTML=tab==='today'?todayView():tab==='sheet'?sheetView():tab==='tasks'?tasksView():reportView();
 }
 
+function checkRow(o){
+  const k=o.t.id+'|'+o.date;
+  return `<label class="chk ${o.status}"><input type="checkbox" data-act="tick" data-k="${k}" ${o.status==='Done'?'checked':''}><span><b>${esc(o.t.title)}</b> <span class="mu">${o.date!==today?esc(o.date)+' · ':''}${esc(o.t.time)} · ${esc(pName(o.t.property))}</span>${o.run&&o.run.by?`<br><span class="mu">✔ ${esc(o.run.by)}</span>`:''}${o.status==='Skipped'?`<br><span class="mu">Skipped${o.run.note?': '+esc(o.run.note):''}</span>`:''}</span></label>`;
+}
 function todayView(){
-  const missed=occurrences(iso(new Date(Date.now()-6*864e5)),today).filter(o=>o.status==='Missed');
   const due=occurrences(today,today);
-  const row=o=>`<tr><td>${esc(o.date)} ${esc(o.t.time)}</td><td>${esc(o.t.title)}</td><td>${esc(pName(o.t.property))}</td><td>${esc(sName(o.t.assignee))}</td>
-    <td><span class="pill ${o.status}">${o.status}</span></td>
-    <td class="noprint">${o.status==='Done'||o.status==='Skipped'?`<button class="btn sm" data-act="undo" data-k="${o.t.id}|${o.date}">Undo</button>`:
-    `<button class="btn sm pri" data-act="done" data-k="${o.t.id}|${o.date}">Done</button> <button class="btn sm" data-act="skip" data-k="${o.t.id}|${o.date}">Skip</button>`}</td></tr>`;
-  const tbl=rows=>rows.length?`<div class="table"><table><tr><th>When</th><th>Task</th><th>Property</th><th>Assigned</th><th>Status</th><th></th></tr>${rows.map(row).join('')}</table></div>`:'<p class="mu">Nothing here.</p>';
-  return `<div class="card"><h2>Due today (${today})</h2>${S.tasks.length?tbl(due):'<p class="mu">No scheduled tasks yet. Add one in “Scheduled tasks”.</p>'}</div>
-  <div class="card"><h2>Missed in the last 7 days</h2>${tbl(missed)}</div>`;
+  const missed=occurrences(iso(new Date(Date.now()-6*864e5)),today).filter(o=>o.status==='Missed');
+  const by={};due.forEach(o=>{const r=o.t.role||'Anyone';(by[r]=by[r]||[]).push(o)});
+  const cards=Object.entries(by).map(([r,l])=>`<div class="card"><div class="row" style="justify-content:space-between"><h2>${esc(r)}</h2><span class="mu">${l.filter(o=>o.status==='Done').length}/${l.length} done</span></div>${l.sort((x,y)=>x.t.time.localeCompare(y.t.time)).map(checkRow).join('')}</div>`).join('');
+  return `<h2>Today · ${today}</h2>${cards||'<div class="card mu">No tasks due today. Load the sample list or add tasks in “Scheduled tasks”.</div>'}${missed.length?`<div class="card"><h2>Missed in the last 7 days</h2>${missed.map(checkRow).join('')}</div>`:''}`;
 }
-
+function sheetView(){
+  const [from,to,label]=range(sheet.type,sheet.date);
+  const days=[];for(let d=parse(from);iso(d)<=to;d.setDate(d.getDate()+1))days.push(iso(d));
+  const tasks=S.tasks.filter(t=>t.active&&(!sheet.role||t.role===sheet.role)&&days.some(d=>isDue(t,d)));
+  const head=days.map(d=>`<th style="text-align:center">${+d.slice(8)}<br><span class="mu">${DOW[parse(d).getDay()].slice(0,2)}</span></th>`).join('');
+  const body=tasks.map(t=>`<tr><td>${esc(t.title)}<br><span class="mu">${esc(t.role||'')} · ${esc(t.time)}</span></td>${days.map(d=>{
+    if(!isDue(t,d))return '<td style="background:var(--bg)"></td>';
+    const r=S.runs[t.id+'|'+d];return `<td style="text-align:center"><input type="checkbox" style="width:auto" data-act="tick" data-k="${t.id}|${d}" ${r&&r.status==='Done'?'checked':''}></td>`}).join('')}</tr>`).join('');
+  return `<div class="card noprint"><div class="row">
+   <div><label>Role</label><select id="s-role">${opts([['','All roles'],...ROLES.map(r=>[r,r])],sheet.role)}</select></div>
+   <div><label>Sheet</label><select id="s-type">${opts([['daily','Daily'],['weekly','Weekly'],['monthly','Monthly']],sheet.type)}</select></div>
+   <div><label>Date</label><input id="s-date" type="date" value="${sheet.date}"></div>
+   <div style="margin-left:auto"><button class="btn pri" data-act="print">Print wall checklist</button></div></div></div>
+  <div class="card"><h2>${esc(sheet.role||'All roles')} checklist · ${esc(label)}</h2>
+  ${tasks.length?`<div class="table"><table><tr><th>Task</th>${head}</tr>${body}</table></div>
+  <p style="margin-top:28px">Supervisor sign-off: ______________________ &nbsp; Date: ____________</p>`:'<p class="mu">No tasks for this role in this period.</p>'}</div>`;
+}
+function shareBox(){
+  return `<div class="card noprint"><h2>Staff checklist links</h2><p class="mu">Each link opens only that role’s tasks for the day.</p>${ROLES.map(r=>{const u=new URL('staff/?role='+r.toLowerCase(),location.href).href;
+   return `<div class="row" style="margin-bottom:6px"><b style="width:90px">${r}</b><input readonly value="${esc(u)}" style="flex:1;min-width:200px"><button class="btn sm" data-act="copy" data-u="${esc(u)}">Copy</button> <a class="btn sm" href="${esc(u)}" target="_blank">Open</a></div>`}).join('')}</div>`;
+}
 function tasksView(){
-  const e=editing&&(editing==='new'?{title:'',category:'Plumbing',property:'',assignee:'',freq:'weekly',dow:1,dom:1,time:'10:00',start:today,notes:'',active:true}:S.tasks.find(t=>t.id===editing));
+  const e=editing&&(editing==='new'?{title:'',category:'Housekeeping',role:'Housekeeper',property:'',assignee:'',freq:'weekly',dow:1,dom:1,time:'10:00',start:today,notes:'',active:true}:S.tasks.find(t=>t.id===editing));
   const form=e?`<div class="card"><h2>${editing==='new'?'New scheduled task':'Edit task'}</h2>
   <div class="grid">
    <div><label>Title</label><input id="f-title" value="${esc(e.title)}" placeholder="e.g. Clean water tank"></div>
    <div><label>Category</label><select id="f-cat">${opts(CATS.map(c=>[c,c]),e.category)}</select></div>
+   <div><label>Role (who does it)</label><select id="f-role">${opts([['','Anyone'],...ROLES.map(r=>[r,r])],e.role)}</select></div>
    <div><label>Property</label><select id="f-prop">${opts([['','All properties'],...props.map(p=>[p.id,p.name])],e.property)}</select></div>
    <div><label>Assigned to</label><select id="f-asg">${opts([['','Unassigned'],...staff.map(s=>[s.id,s.name+' ('+s.role+')'])],e.assignee)}</select></div>
    <div><label>Repeats</label><select id="f-freq">${opts([['daily','Daily'],['weekly','Weekly'],['monthly','Monthly']],e.freq)}</select></div>
@@ -129,12 +170,12 @@ function tasksView(){
   </div>
   <label style="margin-top:10px">Notes / checklist</label><textarea id="f-notes" rows="2">${esc(e.notes)}</textarea>
   <div class="row" style="margin-top:10px"><button class="btn pri" data-act="save">Save task</button><button class="btn" data-act="cancel">Cancel</button></div></div>`:'';
-  const list=S.tasks.length?`<div class="table"><table><tr><th>Task</th><th>Category</th><th>Property</th><th>Assigned</th><th>Schedule</th><th>Active</th><th></th></tr>
-  ${S.tasks.map(t=>`<tr><td>${esc(t.title)}</td><td>${esc(t.category)}</td><td>${esc(pName(t.property))}</td><td>${esc(sName(t.assignee))}</td><td>${freqText(t)} · ${esc(t.time)}</td>
+  const list=S.tasks.length?`<div class="table"><table><tr><th>Task</th><th>Role</th><th>Category</th><th>Property</th><th>Assigned</th><th>Schedule</th><th>Active</th><th></th></tr>
+  ${S.tasks.map(t=>`<tr><td>${esc(t.title)}</td><td>${esc(t.role||'—')}</td><td>${esc(t.category)}</td><td>${esc(pName(t.property))}</td><td>${esc(sName(t.assignee))}</td><td>${freqText(t)} · ${esc(t.time)}</td>
   <td><input type="checkbox" data-act="toggle" data-id="${t.id}" ${t.active?'checked':''} style="width:auto"></td>
   <td><button class="btn sm" data-act="edit" data-id="${t.id}">Edit</button> <button class="btn sm del" data-act="del" data-id="${t.id}">Delete</button></td></tr>`).join('')}</table></div>`:'<p class="mu">No tasks yet.</p>';
-  return form+`<div class="card"><div class="row" style="justify-content:space-between"><h2>Scheduled tasks</h2>
-   <span><button class="btn pri" data-act="new">+ New task</button> ${S.tasks.length?'':'<button class="btn" data-act="sample">Add sample tasks</button>'}</span></div>${list}</div>`;
+  return form+shareBox()+`<div class="card"><div class="row" style="justify-content:space-between"><h2>Scheduled tasks</h2>
+   <span><button class="btn pri" data-act="new">+ New task</button> <button class="btn" data-act="sample">Load sample tasks</button></span></div>${list}</div>`;
 }
 
 function reportView(){
@@ -157,7 +198,7 @@ function reportView(){
   ${total?`<h2>By property</h2><div class="table"><table><tr><th>Property</th><th>Tasks</th><th>Done</th><th>Rate</th></tr>${group(o=>pName(o.t.property))}</table></div>
   <h2 style="margin-top:12px">By category</h2><div class="table"><table><tr><th>Category</th><th>Tasks</th><th>Done</th><th>Rate</th></tr>${group(o=>o.t.category)}</table></div>
   <h2 style="margin-top:12px">Task log</h2><div class="table"><table><tr><th>Date</th><th>Task</th><th>Property</th><th>Assigned</th><th>Status</th><th>Note</th></tr>
-  ${occ.map(o=>`<tr><td>${o.date}</td><td>${esc(o.t.title)}</td><td>${esc(pName(o.t.property))}</td><td>${esc(sName(o.t.assignee))}</td><td><span class="pill ${o.status}">${o.status}</span></td><td>${esc(o.run&&o.run.note||'')}</td></tr>`).join('')}</table></div>`:'<p class="mu">No scheduled tasks fall in this period.</p>'}
+  ${occ.map(o=>`<tr><td>${o.date}</td><td>${esc(o.t.title)}</td><td>${esc(pName(o.t.property))}</td><td>${esc(sName(o.t.assignee))}</td><td><span class="pill ${o.status}">${o.status}</span></td><td>${esc((o.run&&o.run.by?o.run.by+' · ':'')+(o.run&&o.run.note||''))}</td></tr>`).join('')}</table></div>`:'<p class="mu">No scheduled tasks fall in this period.</p>'}
   ${tk.length?`<h2 style="margin-top:12px">Resident maintenance tickets raised (${tk.length})</h2><div class="table"><table><tr><th>ID</th><th>Category</th><th>Issue</th><th>Priority</th><th>Status</th></tr>${tk.map(t=>`<tr><td>${esc(t.id)}</td><td>${esc(t.category)}</td><td>${esc(t.title)}</td><td>${esc(t.priority)}</td><td>${esc(t.status)}</td></tr>`).join('')}</table></div>`:''}
   </div>`;
 }
@@ -181,15 +222,14 @@ document.addEventListener('click',e=>{
   else if(a==='edit'){editing=id;return render()}
   else if(a==='cancel'){editing=null;return render()}
   else if(a==='del'){if(!confirm('Delete this task and its history?'))return;S.tasks=S.tasks.filter(x=>x.id!==id);Object.keys(S.runs).forEach(r=>r.startsWith(id+'|')&&delete S.runs[r])}
-  else if(a==='sample'){const base={property:'',assignee:'',time:'10:00',start:today,notes:'',active:true,dow:1,dom:1};
-    S.tasks.push({...base,id:uid(),title:'Common area cleaning check',category:'Housekeeping',freq:'daily',time:'09:00'},
-      {...base,id:uid(),title:'Water tank cleaning',category:'Water tank',freq:'weekly',dow:6},
-      {...base,id:uid(),title:'Fire extinguisher & exit inspection',category:'Fire safety',freq:'monthly',dom:1},
-      {...base,id:uid(),title:'Pest control spray',category:'Pest control',freq:'monthly',dom:15})}
+  else if(a==='sample'){const have=new Set(S.tasks.map(x=>x.title));
+    SAMPLES.forEach(x=>have.has(x[0])||S.tasks.push({id:uid(),title:x[0],role:x[1],category:x[2],freq:x[3],dow:x[4],dom:x[5],time:x[6],start:today,property:'',assignee:'',notes:'',active:true}))}
+  else if(a==='tick'){if(t.checked)S.runs[k]={status:'Done',note:'',by:'Admin',at:new Date().toISOString()};else delete S.runs[k]}
+  else if(a==='copy'){if(navigator.clipboard)navigator.clipboard.writeText(t.dataset.u);t.textContent='Copied';return}
   else if(a==='save'){
     const g=i=>document.getElementById(i).value,title=g('f-title').trim();
     if(!title)return alert('Please enter a title.');
-    const data={title,category:g('f-cat'),property:g('f-prop'),assignee:g('f-asg'),freq:g('f-freq'),dow:+g('f-dow'),dom:Math.min(31,Math.max(1,+g('f-dom')||1)),time:g('f-time')||'10:00',start:g('f-start')||today,notes:g('f-notes')};
+    const data={title,category:g('f-cat'),role:g('f-role'),property:g('f-prop'),assignee:g('f-asg'),freq:g('f-freq'),dow:+g('f-dow'),dom:Math.min(31,Math.max(1,+g('f-dom')||1)),time:g('f-time')||'10:00',start:g('f-start')||today,notes:g('f-notes')};
     if(editing==='new')S.tasks.push({...data,id:uid(),active:true});else Object.assign(S.tasks.find(x=>x.id===editing),data);
     editing=null}
   else if(a==='csv')return csv();
@@ -201,12 +241,19 @@ document.addEventListener('change',e=>{
   if(e.target.id==='r-type'){rep.type=e.target.value;render()}
   if(e.target.id==='r-date'&&e.target.value){rep.date=e.target.value;render()}
   if(e.target.id==='f-freq')syncFreq();
+  if(e.target.id==='s-role'){sheet.role=e.target.value;render()}
+  if(e.target.id==='s-type'){sheet.type=e.target.value;render()}
+  if(e.target.id==='s-date'&&e.target.value){sheet.date=e.target.value;render()}
 });
 function syncFreq(){const f=document.getElementById('f-freq');if(!f)return;
   document.getElementById('w-dow').classList.toggle('hide',f.value!=='weekly');
   document.getElementById('w-dom').classList.toggle('hide',f.value!=='monthly')}
 new MutationObserver(syncFreq).observe(document.getElementById('view'),{childList:true});
 window.addEventListener('storage',e=>{if(e.key===KEY){S=rd(KEY,S);render()}});
+if(!S.seeded&&!S.tasks.length){ // first open: preload the basic task list
+  SAMPLES.forEach(x=>S.tasks.push({id:uid(),title:x[0],role:x[1],category:x[2],freq:x[3],dow:x[4],dom:x[5],time:x[6],start:today,property:'',assignee:'',notes:'',active:true}));
+  S.seeded=true;save();
+}
 render();
 </script>
 </body>
